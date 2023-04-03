@@ -1,4 +1,4 @@
-import torch 
+import torch
 import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,7 +11,6 @@ from shapely.geometry import MultiPoint
 
 
 class Navigator(nn.Module):
-    
     def __init__(self, encoder, embedder, emb_dim, cls_dim):
         super().__init__()
         self.enc = encoder
@@ -22,13 +21,12 @@ class Navigator(nn.Module):
     def forward(self, x, f):
         e = self.enc(x)
         z = self.emb(e)
-        c = self.crc(z[np.argwhere(np.asarray( f)).squeeze()])
-        n = self.nrm(z[np.argwhere(np.asarray(~f)).squeeze()]) 
+        c = self.crc(z[np.argwhere(np.asarray(f)).squeeze()])
+        n = self.nrm(z[np.argwhere(np.asarray(~f)).squeeze()])
         return (e, z, c, n)
-    
-    
+
+
 class Router:
-    
     def __init__(self, hmap, thrs, psize):
         self.hmap = hmap
         self.thrs = thrs
@@ -39,29 +37,31 @@ class Router:
         self.hmap[self.hmap > self.thrs] = 1
         self.hmap = self.hmap.astype(np.uint8)
         self.hmap = rasterio.features.shapes(self.hmap)
-        
+
         self.roe = [
             shapely.geometry.Polygon(poly[0]["coordinates"][0])
             for poly in self.hmap if poly[1] == 1
-        ] 
+        ]
         return self.roe
-        
+
     def classify(self, x, y):
         lst = []
-            
-        patch = MultiPoint([
-            [x - self.psize, y - self.psize], 
-            [x -          0, y - self.psize], 
-            [x - self.psize, y -          0], 
-            [x -          0, y -          0],
-        ]).convex_hull
-    
+
+        patch = MultiPoint(
+            [
+                [x - self.psize, y - self.psize],
+                [x - 0, y - self.psize],
+                [x - self.psize, y - 0],
+                [x - 0, y - 0],
+            ]
+        ).convex_hull
+
         for i in range(len(self.roe)):
             lst.append(self.roe[i].intersects(patch))
-        
+
         return any(lst)
-    
-    
+
+
 def create_filter(dataloader, batch, router):
     fltr = []
     for index in batch[2]:
@@ -78,21 +78,21 @@ def merge_and_order(x, y, fltr):
     if len(y.size()) == 1:
         y = y.unsqueeze(dim=0)
     i, j = 0, 0
-    z = torch.cat((x, y)) 
+    z = torch.cat((x, y))
     for k in range(len(z)):
-        if fltr[k] == True:        
+        if fltr[k] == True:
             z[k] = x[i]
             i += 1
         else:
             z[k] = y[j]
-            j += 1         
+            j += 1
     return z
 
 
 def deploy_model(model, dataloader, n_classes, n_samples, device):
     model.eval()
     softmax = nn.Softmax(dim=1)
-    
+
     preds = []
     probs = []
 
@@ -100,14 +100,14 @@ def deploy_model(model, dataloader, n_classes, n_samples, device):
         image = image.to(device)
         image = image.squeeze()
         with torch.no_grad():
-             with torch.cuda.amp.autocast(): 
+            with torch.cuda.amp.autocast():
                 logits = model(image)
         preds.append(torch.max(logits, 1)[1])
         probs.append(softmax(logits))
-    
+
     preds = torch.cat(preds, 0)
     probs = torch.cat(probs, 0)
-    
+
     return preds, probs
 
 
@@ -119,14 +119,14 @@ def calculate_scores(preds, probs):
     for i, pred in enumerate(preds):
         if pred == tgt_cls:
             scores[i] = probs[i][tgt_cls]
-            scores[i] = 50 - 50 * scores[i] 
+            scores[i] = 50 - 50 * scores[i]
         else:
             scores[i] = 1 - probs[i][tgt_cls]
-            scores[i] = 50 + 50 * scores[i] 
+            scores[i] = 50 + 50 * scores[i]
 
     scores = scores.cpu().numpy()
     scores = list([[x] for x in scores])
-    
+
     return scores
 
 
