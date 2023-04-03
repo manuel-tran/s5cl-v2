@@ -40,7 +40,9 @@ class MaskedSupConLoss(nn.Module):
         self.low = 0
         self.high = None
         self.reducer = DoNothingReducer()
-        self.criterion = SupConLoss(temperature=temperature, reducer=self.reducer)
+        self.criterion = SupConLoss(
+            temperature=temperature, reducer=self.reducer
+        )
 
     def element_reduction_helper(self, losses, embeddings):
         low_condition = losses > self.low if self.low is not None else True
@@ -65,7 +67,6 @@ class HMLC(nn.Module):
     Paper: https://arxiv.org/abs/2204.13207
     GitHub: https://github.com/salesforce/hierarchicalContrastiveLearning
     """
-
     def __init__(
         self,
         temperature=0.1,
@@ -86,7 +87,8 @@ class HMLC(nn.Module):
         return torch.pow(2, value)
 
     def forward(self, features, labels, masks=None):
-        device = torch.device("cuda") if features.is_cuda else torch.device("cpu")
+        device = torch.device("cuda"
+                             ) if features.is_cuda else torch.device("cpu")
 
         cumulative_loss = torch.tensor(0.0).to(device)
         max_loss_lower_layer = torch.tensor(float("-inf"))
@@ -96,14 +98,16 @@ class HMLC(nn.Module):
             if masks == None:
                 layer_loss = self.sup_con_loss(features, layer_labels)
             else:
-                layer_loss = self.masked_sup_con_loss(features, layer_labels, masks)
+                layer_loss = self.masked_sup_con_loss(
+                    features, layer_labels, masks
+                )
 
             if self.loss_type == "hmc":
                 cumulative_loss += (
                     self.layer_penalty(
-                        torch.tensor(1 / (labels.shape[1] - l)).type(torch.float)
-                    )
-                    * layer_loss
+                        torch.tensor(1 /
+                                     (labels.shape[1] - l)).type(torch.float)
+                    ) * layer_loss
                 )
             elif self.loss_type == "hce":
                 layer_loss = torch.max(
@@ -116,9 +120,9 @@ class HMLC(nn.Module):
                 )
                 cumulative_loss += (
                     self.layer_penalty(
-                        torch.tensor(1 / (labels.shape[1] - l)).type(torch.float)
-                    )
-                    * layer_loss
+                        torch.tensor(1 /
+                                     (labels.shape[1] - l)).type(torch.float)
+                    ) * layer_loss
                 )
             else:
                 raise NotImplementedError("Unknown loss")
